@@ -1,4 +1,18 @@
-# Lightweight and High-Fidelity End-to-End Text-to-Speech with Multi-Band Generation and Inverse Short-Time Fourier Transform
+# MB-iSTFT-VITS with AutoVocoder
+
+MB-iSTFT-VITS: [paper](https://arxiv.org/abs/2210.15975)
+
+AutoVocoder: [paper](https://arxiv.org/abs/2211.06989)
+## Motivation
+Starting from [VITS](https://arxiv.org/abs/2106.06103), MB/MS-iSTFT-VITS improves the synthesis speed using below techniques:
+1. Decomposition of speech signals into sub-band signals
+2. iSTFT based waveform generation process<br>
+
+Based on this well-designed framework, this repository aims to improve sound quality with the foundings from the Autovocoder paper. Forked from MB-iSTFT-VITS, the expected modifications are below: 
+- [ ] Posterior Encoder: Utilize 4 input components (Phase, Magnitude, Real, Imaginary) and use ResNet-based structure
+- [ ] Decoder: Use Real/Imaginary instead of Phase/Magnitude to construct complex spectrogram
+
+<!-- 
 ### Masaya Kawamura, Yuma Shirahata, Ryuichi Yamamoto, Kentaro Tachibana
 We propose a lightweight end-to-end text-to-speech model using multi-band generation and inverse short-time Fourier transform. Our model is based on VITS, a high-quality end-to-end text-to-speech model, but adopts two changes for more efficient inference: 1) the most computationally expensive component is partially replaced with a simple inverse short-time Fourier transform, and 2) multi-band generation, with fixed or trainable synthesis filters, is used to generate waveforms. Unlike conventional lightweight models, which employ optimization or knowledge distillation separately to train two cascaded components, our method enjoys the full benefits of end-to-end optimization. Experimental results show that our model synthesized speech as natural as that synthesized by VITS, while achieving a real-time factor of 0.066 on an Intel Core i7 CPU, 4.1 times faster than VITS. Moreover, a smaller version of the model significantly outperformed a lightweight baseline model with respect to both naturalness and inference speed. Code and audio samples are available from [https://github.com/MasayaKawamura/MB-iSTFT-VITS](https://github.com/MasayaKawamura/MB-iSTFT-VITS).
 
@@ -47,4 +61,4 @@ After the training, you can check inference audio using [inference.ipynb](infere
 ## References
 - https://github.com/jaywalnut310/vits.git
 - https://github.com/rishikksh20/iSTFTNet-pytorch.git
-- https://github.com/rishikksh20/melgan.git
+- https://github.com/rishikksh20/melgan.git -->
