@@ -201,6 +201,12 @@ class TorchSTFT(torch.nn.Module):
 
         return inverse_transform.unsqueeze(-2)  # unsqueeze to stay consistent with conv_transpose1d implementation
 
+    def cartesian_inverse(self, real, imag):
+        complex_num = real + 1j*imag
+        inverse_transform = torch.istft(complex_num,self.filter_length, self.hop_length, self.win_length, window=self.window.to(real.device))
+
+        return inverse_transform.unsqueeze(-2)  # unsqueeze to stay consistent with conv_transpose1d implementation
+    
     def forward(self, input_data):
         self.magnitude, self.phase = self.transform(input_data)
         reconstruction = self.inverse(self.magnitude, self.phase)

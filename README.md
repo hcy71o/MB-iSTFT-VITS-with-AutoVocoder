@@ -1,30 +1,20 @@
 # MB-iSTFT-VITS with AutoVocoder
 
-MB-iSTFT-VITS: [paper](https://arxiv.org/abs/2210.15975)
-
-AutoVocoder: [paper](https://arxiv.org/abs/2211.06989)
-## Motivation
-Starting from [VITS](https://arxiv.org/abs/2106.06103), MB/MS-iSTFT-VITS improves the synthesis speed using below techniques:
-1. Decomposition of speech signals into sub-band signals
+## Motivation for implementation
+Starting from [VITS](https://arxiv.org/abs/2106.06103), [MB-iSTFT-VITS](https://arxiv.org/abs/2210.15975) improves the synthesis speed using below techniques:
+1. Multi-band parallel generation strategy by decomposing speech signals into sub-band signals
 2. iSTFT based waveform generation process<br>
 
-Based on this well-designed framework, this repository aims to improve sound quality with the foundings from the Autovocoder paper. Forked from MB-iSTFT-VITS, the expected modifications are below: 
-- [ ] Posterior Encoder: Utilize 4 input components (Phase, Magnitude, Real, Imaginary) and use ResNet-based structure
-- [ ] Decoder: Use Real/Imaginary instead of Phase/Magnitude to construct complex spectrogram
+Based on this well-designed framework, this repository aims to further improve sound quality and inference speech with [Autovocoder](https://github.com/hcy71o/AutoVocoder).<br> This repo is based on [MB-iSTFT-VITS](https://github.com/MasayaKawamura/MB-iSTFT-VITS), and the expected modifications and enhancements are below:
+- [x] 1. Replace the iSTFTNet-based decoder to AutoVocoder-based decoder. <br>This can improve synthesis speed, because Autovocoder directly generates waveform with `(1024, 256, 1024)` fft/hop/win size without upsmpling modules. Multi-band startegy will be maintained. Also, it is reasonable because VITS directly models powerful latent representations. 
+- [ ] 2. In iSTFT operation, use Real/Imaginary instead of Phase/Magnitude components to construct complex spectrogram.
+- [ ] 3. Replace the WaveNet-based posterior encoder to AutoVocoder-based posterior encoder.<br>
+Modifications `2&3` are inspired by the foundings of the Autovocoder paper (Section 3.3).
 
-<!-- 
-### Masaya Kawamura, Yuma Shirahata, Ryuichi Yamamoto, Kentaro Tachibana
-We propose a lightweight end-to-end text-to-speech model using multi-band generation and inverse short-time Fourier transform. Our model is based on VITS, a high-quality end-to-end text-to-speech model, but adopts two changes for more efficient inference: 1) the most computationally expensive component is partially replaced with a simple inverse short-time Fourier transform, and 2) multi-band generation, with fixed or trainable synthesis filters, is used to generate waveforms. Unlike conventional lightweight models, which employ optimization or knowledge distillation separately to train two cascaded components, our method enjoys the full benefits of end-to-end optimization. Experimental results show that our model synthesized speech as natural as that synthesized by VITS, while achieving a real-time factor of 0.066 on an Intel Core i7 CPU, 4.1 times faster than VITS. Moreover, a smaller version of the model significantly outperformed a lightweight baseline model with respect to both naturalness and inference speed. Code and audio samples are available from [https://github.com/MasayaKawamura/MB-iSTFT-VITS](https://github.com/MasayaKawamura/MB-iSTFT-VITS).
+`Disclaimer : This repo is built for testing purpose. Performance is not guaranteed.`
 
-You can check the [paper](https://arxiv.org/abs/2210.15975) and [demo page](https://masayakawamura.github.io/Demo_MB-iSTFT-VITS/).
-
-
-<img src="./fig/proposed_model.png" width="100%">
-
-## Multi-band iSTFT VITS and multi-stream iSTFT VITS 
-This repository is based on **[official VITS code](https://github.com/jaywalnut310/vits.git)**.<br>
-You can train the iSTFT-VITS, multi-band iSTFT VITS (MB-iSTFT-VITS), and multi-stream iSTFT VITS (MS-iSTFT-VITS) using this repository.<br>
-We also provide the [pretrained models](https://drive.google.com/drive/folders/1CKSRFUHMsnOl0jxxJVCeMzyYjaM98aI2?usp=sharing).
+## Explanation (from [MB-iSTFT-VITS](https://github.com/MasayaKawamura/MB-iSTFT-VITS))
+*In current, this repo tries to implement MB-iSTFT-VITS based model. Application to mini, MS, w/o MB might be future work.
 ### 1. Pre-requisites
 
 0. Python >= 3.6
@@ -41,15 +31,7 @@ mkdir monotonic_align
 python setup.py build_ext --inplace
 ```
 
-### 2. Setting json file in [configs](configs)
-
-| Model | How to set up json file in [configs](configs) | Sample of json file configuration|
-| :---: | :---: | :---: |
-| iSTFT-VITS | ```"istft_vits": true, ```<br>``` "upsample_rates": [8,8], ``` | ljs_istft_vits.json |
-| MB-iSTFT-VITS | ```"subbands": 4,```<br>```"mb_istft_vits": true, ```<br>``` "upsample_rates": [4,4], ``` | ljs_mb_istft_vits.json |
-| MS-iSTFT-VITS | ```"subbands": 4,```<br>```"ms_istft_vits": true, ```<br>``` "upsample_rates": [4,4], ``` | ljs_ms_istft_vits.json |
-
-### 3. Training
+### 2. Training
 In the case of MB-iSTFT-VITS training, run the following script
 ```sh
 python train_latest.py -c configs/ljs_mb_istft_vits.json -m ljs_mb_istft_vits
@@ -59,6 +41,5 @@ python train_latest.py -c configs/ljs_mb_istft_vits.json -m ljs_mb_istft_vits
 After the training, you can check inference audio using [inference.ipynb](inference.ipynb)
 
 ## References
-- https://github.com/jaywalnut310/vits.git
-- https://github.com/rishikksh20/iSTFTNet-pytorch.git
-- https://github.com/rishikksh20/melgan.git -->
+- MB-iSTFT-VITS: [Paper](https://arxiv.org/abs/2210.15975) / [Code](https://github.com/MasayaKawamura/MB-iSTFT-VITS)
+- AutoVocoder: [Paper](https://arxiv.org/abs/2211.06989) / [Code](https://github.com/hcy71o/AutoVocoder) (unofficial)

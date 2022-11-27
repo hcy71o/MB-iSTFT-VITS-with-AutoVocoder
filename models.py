@@ -303,70 +303,75 @@ class iSTFT_Generator(torch.nn.Module):
         remove_weight_norm(self.conv_pre)
         remove_weight_norm(self.conv_post)
 
+class ResBlock(torch.nn.Module):
+    def __init__(self, in_ch, out_ch):
+        super().__init__()
+        self.convs = nn.ModuleList([
+            Conv2d(in_ch, out_ch, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.ReLU()
+        ])
+        self.out_ch = out_ch
+        self.in_ch = in_ch
 
+    def forward(self, x):
+        for c in self.convs:
+            res = c(x)
+            if self.out_ch == self.in_ch:
+                x = res + x
+            else:
+                x = res
+        return x
+      
 class Multiband_iSTFT_Generator(torch.nn.Module):
-    def __init__(self, initial_channel, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, upsample_initial_channel, upsample_kernel_sizes, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=0):
+    def __init__(self, initial_channel, n_blocks, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=0):
         super(Multiband_iSTFT_Generator, self).__init__()
         # self.h = h
         self.subbands = subbands
-        self.num_kernels = len(resblock_kernel_sizes)
-        self.num_upsamples = len(upsample_rates)
-        self.conv_pre = weight_norm(Conv1d(initial_channel, upsample_initial_channel, 7, 1, padding=3))
-        resblock = modules.ResBlock1 if resblock == '1' else modules.ResBlock2
-
-        self.ups = nn.ModuleList()
-        for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
-            self.ups.append(weight_norm(
-                ConvTranspose1d(upsample_initial_channel//(2**i), upsample_initial_channel//(2**(i+1)),
-                                k, u, padding=(k-u)//2)))
-
-        self.resblocks = nn.ModuleList()
-        for i in range(len(self.ups)):
-            ch = upsample_initial_channel//(2**(i+1))
-            for j, (k, d) in enumerate(zip(resblock_kernel_sizes, resblock_dilation_sizes)):
-                self.resblocks.append(resblock(ch, k, d))
-
-        self.post_n_fft = gen_istft_n_fft
-        self.ups.apply(init_weights)
-        self.reflection_pad = torch.nn.ReflectionPad1d((1, 0))
-        self.reshape_pixelshuffle = []
- 
-        self.subband_conv_post = weight_norm(Conv1d(ch, self.subbands*(self.post_n_fft + 2), 7, 1, padding=3))
+        self.linear = Conv1d(initial_channel, gen_istft_n_fft//2+1, 1, 1, 0)
+        self.decs = nn.ModuleList()
+        middle = n_blocks//2 + 1
+        for i in range(1, n_blocks+1):
+            if i < middle:
+                self.decs.append(ResBlock(1,1))
+            elif i == middle:
+                self.decs.append(ResBlock(1,4))
+            else:
+                self.decs.append(ResBlock(4,4))
+                
+        self.conv_post = Conv2d(4, self.subbands*2, 3, 1, padding=1) # Predict Real/Img (default) or Magitude/Phase
         
-        self.subband_conv_post.apply(init_weights)
+        self.reflection_pad = nn.ReflectionPad1d((1, 0))
+        self.stft = TorchSTFT(filter_length=gen_istft_n_fft, hop_length=gen_istft_hop_size, win_length=gen_istft_n_fft)
         
         self.gen_istft_n_fft = gen_istft_n_fft
         self.gen_istft_hop_size = gen_istft_hop_size
+        
+        # self.pqmf = PQMF()
 
 
     def forward(self, x, g=None):
-      stft = TorchSTFT(filter_length=self.gen_istft_n_fft, hop_length=self.gen_istft_hop_size, win_length=self.gen_istft_n_fft).to(x.device)
       pqmf = PQMF(x.device)
       
-      x = self.conv_pre(x)#[B, ch, length]
-        
-      for i in range(self.num_upsamples):
-          x = F.leaky_relu(x, modules.LRELU_SLOPE)
-          x = self.ups[i](x)
-          
-          
-          xs = None
-          for j in range(self.num_kernels):
-              if xs is None:
-                  xs = self.resblocks[i*self.num_kernels+j](x)
-              else:
-                  xs += self.resblocks[i*self.num_kernels+j](x)
-          x = xs / self.num_kernels
-          
+      # (B, 1, ch, length)
+      x = self.linear(x).unsqueeze(1)
+      for dec_block in self.decs:
+          x = dec_block(x)
+
+      # (B, 4, N, T)
       x = F.leaky_relu(x)
+      x = x.contiguous().view(x.size(0),-1,x.size(-1)) # (B, 4*ch, T)
       x = self.reflection_pad(x)
-      x = self.subband_conv_post(x)
-      x = torch.reshape(x, (x.shape[0], self.subbands, x.shape[1]//self.subbands, x.shape[-1]))
-
-      spec = torch.exp(x[:,:,:self.post_n_fft // 2 + 1, :])
-      phase = math.pi*torch.sin(x[:,:, self.post_n_fft // 2 + 1:, :])
-
-      y_mb_hat = stft.inverse(torch.reshape(spec, (spec.shape[0]*self.subbands, self.gen_istft_n_fft // 2 + 1, spec.shape[-1])), torch.reshape(phase, (phase.shape[0]*self.subbands, self.gen_istft_n_fft // 2 + 1, phase.shape[-1])))
+      x = x.contiguous().view(x.size(0),4,-1,x.size(-1)) # (B, 4*ch, T') -> (B, 4, ch, T')
+      
+      # (B, 4, ch, T') -> (B, 4*2, N, T')  subbands(4)*real/imag(2)
+      x = self.conv_post(x)
+      # (B, 4, N, T)
+      real = x[:,:self.subbands,:,:]
+      imag = x[:,self.subbands:,:,:]
+      
+      y_mb_hat = self.stft.cartesian_inverse(torch.reshape(real, (real.shape[0]*self.subbands, self.gen_istft_n_fft // 2 + 1, real.shape[-1])), torch.reshape(imag, (imag.shape[0]*self.subbands, self.gen_istft_n_fft // 2 + 1, imag.shape[-1])))
+      # (4*B, ...) -> (4, B, ...)
       y_mb_hat = torch.reshape(y_mb_hat, (x.shape[0], self.subbands, 1, y_mb_hat.shape[-1]))
       y_mb_hat = y_mb_hat.squeeze(-2)
 
@@ -585,6 +590,7 @@ class SynthesizerTrn(nn.Module):
     upsample_rates, 
     upsample_initial_channel, 
     upsample_kernel_sizes,
+    n_blocks, 
     gen_istft_n_fft,
     gen_istft_hop_size,
     n_speakers=0,
@@ -631,7 +637,8 @@ class SynthesizerTrn(nn.Module):
         p_dropout)
     if mb_istft_vits == True:
       print('Mutli-band iSTFT VITS')
-      self.dec = Multiband_iSTFT_Generator(inter_channels, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, upsample_initial_channel, upsample_kernel_sizes, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=gin_channels)
+      # self.dec = Multiband_iSTFT_Generator(inter_channels, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, upsample_initial_channel, upsample_kernel_sizes, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=gin_channels)
+      self.dec = Multiband_iSTFT_Generator(inter_channels, n_blocks, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=gin_channels)
     elif ms_istft_vits == True:
       print('Mutli-stream iSTFT VITS')
       self.dec = Multistream_iSTFT_Generator(inter_channels, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, upsample_initial_channel, upsample_kernel_sizes, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=gin_channels)
