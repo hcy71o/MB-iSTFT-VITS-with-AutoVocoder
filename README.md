@@ -15,6 +15,11 @@ Modifications `2&3` are inspired by the foundings of the Autovocoder paper (Sect
 
 ## Explanation (from [MB-iSTFT-VITS](https://github.com/MasayaKawamura/MB-iSTFT-VITS))
 *In current, this repo tries to implement MB-iSTFT-VITS based model. Application to mini, MS, w/o MB might be future work.
+
+### 0. Baseline: MB-iSTFT-VITS
+
+<p align="center"><img src="./fig/proposed_model.png" width="70%"></p>
+
 ### 1. Pre-requisites
 
 0. Python >= 3.6
