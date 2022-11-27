@@ -14,6 +14,7 @@
     "init_lr_ratio": 1,
     "warmup_epochs": 0,
     "c_mel": 45,
+    "c_wav": 100,
     "c_kl": 1.0,
     "fft_sizes": [384, 683, 171],
     "hop_sizes": [30, 60, 10],
