@@ -10,7 +10,7 @@ Based on this well-designed framework, this repository aims to further improve s
 
 - [x] 2. In iSTFT operation, use Real/Imaginary instead of Phase/Magnitude components to construct complex spectrogram. Add time-domain reconstruction loss.
 
-- [ ] 3. Replace the WaveNet-based posterior encoder to AutoVocoder-based posterior encoder.<br>
+- [ ] 3. Replace the WaveNet-based posterior encoder to AutoVocoder-based posterior encoder, which accept 4 complex components instead of linear spectrogram.<br>
 
 Modifications `1` can improve synthesis speed, because Autovocoder directly generates waveform with `(1024, 256, 1024)` fft/hop/win size without upsmpling modules. Multi-band startegy will be maintained. Also, it is reasonable because VITS directly models powerful latent representations. 
 Modifications `2&3` are inspired by the foundings of the Autovocoder paper (Section 3.3).
