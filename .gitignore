@@ -1,2 +1,4 @@
 DUMMY1
 logs
+*.pyc
+__pycache__
