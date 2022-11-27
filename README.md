@@ -7,7 +7,7 @@ Starting from [VITS](https://arxiv.org/abs/2106.06103), [MB-iSTFT-VITS](https://
 
 Based on this well-designed framework, this repository aims to further improve sound quality and inference speech with [Autovocoder](https://github.com/hcy71o/AutoVocoder).<br> This repo is based on [MB-iSTFT-VITS](https://github.com/MasayaKawamura/MB-iSTFT-VITS), and the expected modifications and enhancements are below:
 - [x] 1. Replace the iSTFTNet-based decoder to AutoVocoder-based decoder & add time-domain reconstruction loss.<br>This can improve synthesis speed, because Autovocoder directly generates waveform with `(1024, 256, 1024)` fft/hop/win size without upsmpling modules. Multi-band startegy will be maintained. Also, it is reasonable because VITS directly models powerful latent representations. 
-- [ ] 2. In iSTFT operation, use Real/Imaginary instead of Phase/Magnitude components to construct complex spectrogram.
+- [x] 2. In iSTFT operation, use Real/Imaginary instead of Phase/Magnitude components to construct complex spectrogram.
 - [ ] 3. Replace the WaveNet-based posterior encoder to AutoVocoder-based posterior encoder.<br>
 Modifications `2&3` are inspired by the foundings of the Autovocoder paper (Section 3.3).
 
