@@ -18,7 +18,7 @@ Modifications `2&3` are inspired by the foundings of the Autovocoder paper (Sect
 
 ### 0. Baseline: MB-iSTFT-VITS
 
-<p align="center"><img src="./fig/proposed_model.png" width="70%"></p>
+<p align="center"><img src="./fig/proposed_model.png" width="85%"></p>
 
 ### 1. Pre-requisites
 
