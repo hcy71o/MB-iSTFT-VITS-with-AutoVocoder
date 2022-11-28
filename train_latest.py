@@ -138,15 +138,16 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
 
   net_g.train()
   net_d.train()
-  for batch_idx, (x, x_lengths, spec, spec_lengths, y, y_lengths) in enumerate(train_loader):
+  for batch_idx, (x, x_lengths, complx, complx_lengths, y, y_lengths) in enumerate(train_loader):
     x, x_lengths = x.cuda(rank, non_blocking=True), x_lengths.cuda(rank, non_blocking=True)
-    spec, spec_lengths = spec.cuda(rank, non_blocking=True), spec_lengths.cuda(rank, non_blocking=True)
+    complx, complx_lengths = complx.cuda(rank, non_blocking=True), complx_lengths.cuda(rank, non_blocking=True)
     y, y_lengths = y.cuda(rank, non_blocking=True), y_lengths.cuda(rank, non_blocking=True)
 
     with autocast(enabled=hps.train.fp16_run):
       y_hat, y_hat_mb, l_length, attn, ids_slice, x_mask, z_mask,\
-      (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(x, x_lengths, spec, spec_lengths)
+      (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(x, x_lengths, complx, complx_lengths)
 
+      '''
       mel = spec_to_mel_torch(
           spec, 
           hps.data.filter_length, 
@@ -155,6 +156,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
           hps.data.mel_fmin, 
           hps.data.mel_fmax)
       y_mel = commons.slice_segments(mel, ids_slice, hps.train.segment_size // hps.data.hop_length)
+      
       y_hat_mel = mel_spectrogram_torch(
           y_hat.squeeze(1), 
           hps.data.filter_length, 
@@ -165,8 +167,20 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
           hps.data.mel_fmin, 
           hps.data.mel_fmax
       )
-
+      '''
+      
+      y_all = y # Just used for plot
       y = commons.slice_segments(y, ids_slice * hps.data.hop_length, hps.train.segment_size) # slice 
+      y_mel = mel_spectrogram_torch(
+          y.squeeze(1), 
+          hps.data.filter_length, 
+          hps.data.n_mel_channels, 
+          hps.data.sampling_rate, 
+          hps.data.hop_length, 
+          hps.data.win_length, 
+          hps.data.mel_fmin, 
+          hps.data.mel_fmax
+      )
 
       # Discriminator
       y_d_hat_r, y_d_hat_g, _, _ = net_d(y, y_hat.detach())
@@ -225,6 +239,10 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
         scalar_dict.update({"loss/g/{}".format(i): v for i, v in enumerate(losses_gen)})
         scalar_dict.update({"loss/d_r/{}".format(i): v for i, v in enumerate(losses_disc_r)})
         scalar_dict.update({"loss/d_g/{}".format(i): v for i, v in enumerate(losses_disc_g)})
+        mel = mel_spectrogram_torch(
+            y_all.squeeze(1), hps.data.filter_length, hps.data.n_mel_channels, hps.data.sampling_rate, 
+            hps.data.hop_length, hps.data.win_length, hps.data.mel_fmin, hps.data.mel_fmax
+        )
         image_dict = { 
             "slice/mel_org": utils.plot_spectrogram_to_numpy(y_mel[0].data.cpu().numpy()),
             "slice/mel_gen": utils.plot_spectrogram_to_numpy(y_hat_mel[0].data.cpu().numpy()), 
@@ -253,29 +271,26 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
 def evaluate(hps, generator, eval_loader, writer_eval):
     generator.eval()
     with torch.no_grad():
-      for batch_idx, (x, x_lengths, spec, spec_lengths, y, y_lengths) in enumerate(eval_loader):
+      for batch_idx, (x, x_lengths, complx, complx_lengths, y, y_lengths) in enumerate(eval_loader):
         x, x_lengths = x.cuda(0), x_lengths.cuda(0)
-        spec, spec_lengths = spec.cuda(0), spec_lengths.cuda(0)
+        complx, complx_lengths = complx.cuda(0), complx_lengths.cuda(0)
         y, y_lengths = y.cuda(0), y_lengths.cuda(0)
 
         # remove else
         x = x[:1]
         x_lengths = x_lengths[:1]
-        spec = spec[:1]
-        spec_lengths = spec_lengths[:1]
+        complx = complx[:1]
+        complx_lengths = complx_lengths[:1]
         y = y[:1]
         y_lengths = y_lengths[:1]
         break
       y_hat, y_hat_mb, attn, mask, *_ = generator.module.infer(x, x_lengths, max_len=1000)
       y_hat_lengths = mask.sum([1,2]).long() * hps.data.hop_length
 
-      mel = spec_to_mel_torch(
-        spec, 
-        hps.data.filter_length, 
-        hps.data.n_mel_channels, 
-        hps.data.sampling_rate,
-        hps.data.mel_fmin, 
-        hps.data.mel_fmax)
+      mel = mel_spectrogram_torch(
+            y.squeeze(1), hps.data.filter_length, hps.data.n_mel_channels, hps.data.sampling_rate, 
+            hps.data.hop_length, hps.data.win_length, hps.data.mel_fmin, hps.data.mel_fmax
+      )
       y_hat_mel = mel_spectrogram_torch(
         y_hat.squeeze(1).float(),
         hps.data.filter_length,
