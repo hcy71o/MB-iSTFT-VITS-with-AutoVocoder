@@ -6,7 +6,7 @@ import torch
 import torch.utils.data
 
 import commons 
-from mel_processing import spectrogram_torch
+from mel_processing import spectrogram_torch, complx_torch
 from utils import load_wav_to_torch, load_filepaths_and_text
 from text import text_to_sequence, cleaned_text_to_sequence
 
@@ -15,7 +15,7 @@ class TextAudioLoader(torch.utils.data.Dataset):
     """
         1) loads audio, text pairs
         2) normalizes text and converts them to sequences of integers
-        3) computes spectrograms from audio files.
+        3) computes 4 complex components from audio files.
     """
     def __init__(self, audiopaths_and_text, hparams):
         self.audiopaths_and_text = load_filepaths_and_text(audiopaths_and_text)
@@ -40,7 +40,7 @@ class TextAudioLoader(torch.utils.data.Dataset):
 
     def _filter(self):
         """
-        Filter text & store spec lengths
+        Filter text & store complx components lengths
         """
         # Store spectrogram lengths for Bucketing
         # wav_length ~= file_size / (wav_channels * Bytes per dim) = file_size / (1 * 2)
@@ -59,8 +59,8 @@ class TextAudioLoader(torch.utils.data.Dataset):
         # separate filename and text
         audiopath, text = audiopath_and_text[0], audiopath_and_text[1]
         text = self.get_text(text)
-        spec, wav = self.get_audio(audiopath)
-        return (text, spec, wav)
+        complx, wav = self.get_audio(audiopath)
+        return (text, complx, wav)
 
     def get_audio(self, filename):
         audio, sampling_rate = load_wav_to_torch(filename)
@@ -69,16 +69,17 @@ class TextAudioLoader(torch.utils.data.Dataset):
                 sampling_rate, self.sampling_rate))
         audio_norm = audio / self.max_wav_value
         audio_norm = audio_norm.unsqueeze(0)
-        spec_filename = filename.replace(".wav", ".spec.pt")
-        if os.path.exists(spec_filename):
-            spec = torch.load(spec_filename)
+        # spec_filename = filename.replace(".wav", ".spec.pt")
+        complx_filename = filename.replace(".wav", ".complx.pt")
+        if os.path.exists(complx_filename):
+            complx = torch.load(complx_filename)
         else:
-            spec = spectrogram_torch(audio_norm, self.filter_length,
+            complx = complx_torch(audio_norm, self.filter_length,
                 self.sampling_rate, self.hop_length, self.win_length,
                 center=False)
-            spec = torch.squeeze(spec, 0)
-            torch.save(spec, spec_filename)
-        return spec, audio_norm
+            complx = torch.squeeze(complx, 0) #(4, N, T)
+            torch.save(complx, complx_filename)
+        return complx, audio_norm
 
     def get_text(self, text):
         if self.cleaned_text:
@@ -107,7 +108,7 @@ class TextAudioCollate():
         """Collate's training batch from normalized text and aduio
         PARAMS
         ------
-        batch: [text_normalized, spec_normalized, wav_normalized]
+        batch: [text_normalized, complx_normalized, wav_normalized]
         """
         # Right zero-pad all one-hot text sequences to max input length
         _, ids_sorted_decreasing = torch.sort(
@@ -115,18 +116,18 @@ class TextAudioCollate():
             dim=0, descending=True)
 
         max_text_len = max([len(x[0]) for x in batch])
-        max_spec_len = max([x[1].size(1) for x in batch])
+        max_complx_len = max([x[1].size(2) for x in batch]) # (4, N, T) -> T
         max_wav_len = max([x[2].size(1) for x in batch])
 
         text_lengths = torch.LongTensor(len(batch))
-        spec_lengths = torch.LongTensor(len(batch))
+        complx_lengths = torch.LongTensor(len(batch))
         wav_lengths = torch.LongTensor(len(batch))
 
         text_padded = torch.LongTensor(len(batch), max_text_len)
-        spec_padded = torch.FloatTensor(len(batch), batch[0][1].size(0), max_spec_len)
+        complx_padded = torch.FloatTensor(len(batch), 4,  batch[0][1].size(1), max_complx_len) # (B, 4, N, max_T)
         wav_padded = torch.FloatTensor(len(batch), 1, max_wav_len)
         text_padded.zero_()
-        spec_padded.zero_()
+        complx_padded.zero_()
         wav_padded.zero_()
         for i in range(len(ids_sorted_decreasing)):
             row = batch[ids_sorted_decreasing[i]]
@@ -135,17 +136,17 @@ class TextAudioCollate():
             text_padded[i, :text.size(0)] = text
             text_lengths[i] = text.size(0)
 
-            spec = row[1]
-            spec_padded[i, :, :spec.size(1)] = spec
-            spec_lengths[i] = spec.size(1)
+            complx = row[1]
+            complx_padded[i, :, :, :complx.size(2)] = complx
+            complx_lengths[i] = complx.size(2)
 
             wav = row[2]
             wav_padded[i, :, :wav.size(1)] = wav
             wav_lengths[i] = wav.size(1)
 
         if self.return_ids:
-            return text_padded, text_lengths, spec_padded, spec_lengths, wav_padded, wav_lengths, ids_sorted_decreasing
-        return text_padded, text_lengths, spec_padded, spec_lengths, wav_padded, wav_lengths
+            return text_padded, text_lengths, complx_padded, complx_lengths, wav_padded, wav_lengths, ids_sorted_decreasing
+        return text_padded, text_lengths, complx_padded, complx_lengths, wav_padded, wav_lengths
 
 
 """Multi speaker version"""

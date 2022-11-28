@@ -47,6 +47,30 @@ def spectral_de_normalize_torch(magnitudes):
 mel_basis = {}
 hann_window = {}
 
+def complx_torch(y, n_fft, sampling_rate, hop_size, win_size, center=False):
+    
+    global hann_window
+    dtype_device = str(y.dtype) + '_' + str(y.device)
+    wnsize_dtype_device = str(win_size) + '_' + dtype_device
+    if wnsize_dtype_device not in hann_window:
+        hann_window[wnsize_dtype_device] = torch.hann_window(win_size).to(dtype=y.dtype, device=y.device)
+
+    y = torch.nn.functional.pad(y.unsqueeze(1), (int((n_fft-hop_size)/2), int((n_fft-hop_size)/2)), mode='reflect')
+    y = y.squeeze(1)
+
+    # (B, N, T)
+    spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[str(y.device)],
+                      center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=True)
+    
+    spec = torch.view_as_real(spec) # (B, N, T, 2)
+    mag = torch.sqrt(spec.pow(2).sum(-1)+(1e-6)) # (B, N, T)
+    phase = torch.angle(spec.sum(-1)) # (B, N, T)
+    spec = spec.permute(0,3,1,2) #(B, 2, N, T)
+    
+    # (B, 4, N, T)
+    complex_comp = torch.cat((spec,mag.unsqueeze(1),phase.unsqueeze(1)), dim=1)
+
+    return complex_comp
 
 def spectrogram_torch(y, n_fft, sampling_rate, hop_size, win_size, center=False):
     # if torch.min(y) < -1.:
@@ -67,6 +91,7 @@ def spectrogram_torch(y, n_fft, sampling_rate, hop_size, win_size, center=False)
                       center=center, pad_mode='reflect', normalized=False, onesided=True)
 
     spec = torch.sqrt(spec.pow(2).sum(-1) + 1e-6)
+    # (B, N, T)
     return spec
 
 
