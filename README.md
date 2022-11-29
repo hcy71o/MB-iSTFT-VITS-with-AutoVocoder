@@ -20,9 +20,9 @@ by directly generating waveform with `(1024, 256, 1024)` fft/hop/win size withou
 
 ## Note
 * For easy comparison, we did not change the whole architecture of the posterior encoder. Instead, we only used group convolution in the front part to process revised inputs (4 complex components).
+* In current, this repo tries to implement MB-iSTFT-VITS based model. Application to mini, MS, w/o MB might be future work.
 
 ## Explanation (from [MB-iSTFT-VITS](https://github.com/MasayaKawamura/MB-iSTFT-VITS))
-*In current, this repo tries to implement MB-iSTFT-VITS based model. Application to mini, MS, w/o MB might be future work.
 
 ### 0. Baseline: MB-iSTFT-VITS
 
