@@ -5,7 +5,7 @@ Starting from [VITS](https://arxiv.org/abs/2106.06103), [MB-iSTFT-VITS](https://
 1. Multi-band parallel generation strategy by decomposing speech signals into sub-band signals
 2. iSTFT based waveform generation process<br>
 
-Based on this well-designed framework, this repository aims to further improve sound quality and inference speech with [Autovocoder](https://github.com/hcy71o/AutoVocoder).<br> This repo is based on [MB-iSTFT-VITS](https://github.com/MasayaKawamura/MB-iSTFT-VITS), and the expected modifications and enhancements are below:
+Based on this well-designed framework, this repository aims to further improve sound quality and inference speed with [Autovocoder](https://github.com/hcy71o/AutoVocoder).<br> This repo is based on [MB-iSTFT-VITS](https://github.com/MasayaKawamura/MB-iSTFT-VITS), and the expected modifications and enhancements are below:
 - [x] 1. Replace the iSTFTNet-based decoder to AutoVocoder-based decoder.<br>
 
 - [x] 2. In iSTFT operation, use Real/Imaginary instead of Phase/Magnitude components to construct complex spectrogram. Add time-domain reconstruction loss.
