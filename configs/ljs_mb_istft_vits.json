@@ -43,6 +43,7 @@
     "istft_vits": false,
     "subbands": 4,
     "n_blocks": 11, 
+    "latent_dim": 192,
     "gen_istft_n_fft": 256,
     "gen_istft_hop_size": 64,
     "inter_channels": 192,

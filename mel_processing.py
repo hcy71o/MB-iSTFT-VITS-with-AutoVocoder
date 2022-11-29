@@ -59,7 +59,7 @@ def complx_torch(y, n_fft, sampling_rate, hop_size, win_size, center=False):
     y = y.squeeze(1)
 
     # (B, N, T)
-    spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[str(y.device)],
+    spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
                       center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=True)
     
     spec = torch.view_as_real(spec) # (B, N, T, 2)

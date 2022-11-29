@@ -156,7 +156,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
           hps.data.mel_fmin, 
           hps.data.mel_fmax)
       y_mel = commons.slice_segments(mel, ids_slice, hps.train.segment_size // hps.data.hop_length)
-      
+      '''
       y_hat_mel = mel_spectrogram_torch(
           y_hat.squeeze(1), 
           hps.data.filter_length, 
@@ -167,7 +167,6 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
           hps.data.mel_fmin, 
           hps.data.mel_fmax
       )
-      '''
       
       y_all = y # Just used for plot
       y = commons.slice_segments(y, ids_slice * hps.data.hop_length, hps.train.segment_size) # slice 

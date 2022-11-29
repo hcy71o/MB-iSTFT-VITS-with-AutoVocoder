@@ -288,7 +288,7 @@ class ElementwiseAffine(nn.Module):
     if not reverse:
       y = self.m + torch.exp(self.logs) * x
       y = y * x_mask
-      logdet = torch.sum(self.logs * x_mask, [1,2])
+      logdet = torch.sum(self.logs * x_mask, [1,2])      
       return y, logdet
     else:
       x = (x - self.m) * torch.exp(-self.logs) * x_mask

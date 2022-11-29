@@ -211,7 +211,6 @@ class ResidualCouplingBlock(nn.Module):
         x = flow(x, x_mask, g=g, reverse=reverse)
     return x
 
-
 class PosteriorEncoder(nn.Module):
   def __init__(self,
       in_channels,
@@ -229,12 +228,17 @@ class PosteriorEncoder(nn.Module):
     self.dilation_rate = dilation_rate
     self.n_layers = n_layers
     self.gin_channels = gin_channels
-
-    self.pre = nn.Conv1d(in_channels, hidden_channels, 1)
+    
+    self.pre = nn.Conv1d(4*in_channels, hidden_channels, 1, groups=4) #* Use group convolution
     self.enc = modules.WN(hidden_channels, kernel_size, dilation_rate, n_layers, gin_channels=gin_channels)
     self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
 
   def forward(self, x, x_lengths, g=None):
+    '''
+    x: (B, 4, N, T)
+    x_length: (B,)
+    '''
+    x = torch.reshape(x, (x.shape[0], -1, x.shape[-1])) # (B, 4N, T)
     x_mask = torch.unsqueeze(commons.sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
     x = self.pre(x) * x_mask
     x = self.enc(x, x_mask, g=g)
@@ -242,6 +246,7 @@ class PosteriorEncoder(nn.Module):
     m, logs = torch.split(stats, self.out_channels, dim=1)
     z = (m + torch.randn_like(m) * torch.exp(logs)) * x_mask
     return z, m, logs, x_mask
+
 
 class iSTFT_Generator(torch.nn.Module):
     def __init__(self, initial_channel, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, upsample_initial_channel, upsample_kernel_sizes, gen_istft_n_fft, gen_istft_hop_size, gin_channels=0):
@@ -324,11 +329,11 @@ class ResBlock(torch.nn.Module):
         return x
       
 class Multiband_iSTFT_Generator(torch.nn.Module):
-    def __init__(self, initial_channel, n_blocks, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=0):
+    def __init__(self, latent_dim, n_blocks, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=0):
         super(Multiband_iSTFT_Generator, self).__init__()
         # self.h = h
         self.subbands = subbands
-        self.linear = Conv1d(initial_channel, gen_istft_n_fft//2+1, 1, 1, 0)
+        self.linear = Conv1d(latent_dim, gen_istft_n_fft//2+1, 1, 1, 0)
         self.decs = nn.ModuleList()
         middle = n_blocks//2 + 1
         for i in range(1, n_blocks+1):
@@ -590,7 +595,8 @@ class SynthesizerTrn(nn.Module):
     upsample_rates, 
     upsample_initial_channel, 
     upsample_kernel_sizes,
-    n_blocks, 
+    n_blocks,
+    latent_dim,
     gen_istft_n_fft,
     gen_istft_hop_size,
     n_speakers=0,
@@ -638,7 +644,7 @@ class SynthesizerTrn(nn.Module):
     if mb_istft_vits == True:
       print('Mutli-band iSTFT VITS')
       # self.dec = Multiband_iSTFT_Generator(inter_channels, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, upsample_initial_channel, upsample_kernel_sizes, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=gin_channels)
-      self.dec = Multiband_iSTFT_Generator(inter_channels, n_blocks, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=gin_channels)
+      self.dec = Multiband_iSTFT_Generator(latent_dim, n_blocks, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=gin_channels)
     elif ms_istft_vits == True:
       print('Mutli-stream iSTFT VITS')
       self.dec = Multistream_iSTFT_Generator(inter_channels, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, upsample_initial_channel, upsample_kernel_sizes, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=gin_channels)
@@ -648,8 +654,9 @@ class SynthesizerTrn(nn.Module):
     else:
       print('Decoder Error in json file')
 
-    self.enc_q = PosteriorEncoder(spec_channels, inter_channels, hidden_channels, 5, 1, 16, gin_channels=gin_channels)
-    self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, 4, gin_channels=gin_channels)
+    self.enc_q = PosteriorEncoder(spec_channels, latent_dim, hidden_channels, 5, 1, 16, gin_channels=gin_channels)
+
+    self.flow = ResidualCouplingBlock(latent_dim, hidden_channels, 5, 1, 4, gin_channels=gin_channels)
 
     if use_sdp:
       self.dp = StochasticDurationPredictor(hidden_channels, 192, 3, 0.5, 4, gin_channels=gin_channels)
@@ -660,6 +667,9 @@ class SynthesizerTrn(nn.Module):
       self.emb_g = nn.Embedding(n_speakers, gin_channels)
 
   def forward(self, x, x_lengths, y, y_lengths, sid=None):
+    '''
+    y: complex components (B, 4, N, T)
+    '''
 
     x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths)
     if self.n_speakers > 0:
@@ -668,6 +678,7 @@ class SynthesizerTrn(nn.Module):
       g = None
 
     z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
+    
     z_p = self.flow(z, y_mask, g=g)
 
     with torch.no_grad():
@@ -697,6 +708,7 @@ class SynthesizerTrn(nn.Module):
 
     z_slice, ids_slice = commons.rand_slice_segments(z, y_lengths, self.segment_size)
     o, o_mb = self.dec(z_slice, g=g)
+    
     return o, o_mb, l_length, attn, ids_slice, x_mask, y_mask, (z, z_p, m_p, logs_p, m_q, logs_q)
 
   def infer(self, x, x_lengths, sid=None, noise_scale=1, length_scale=1, noise_scale_w=1., max_len=None):
