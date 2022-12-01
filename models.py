@@ -643,7 +643,6 @@ class SynthesizerTrn(nn.Module):
         p_dropout)
     if mb_istft_vits == True:
       print('Mutli-band iSTFT VITS')
-      # self.dec = Multiband_iSTFT_Generator(inter_channels, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, upsample_initial_channel, upsample_kernel_sizes, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=gin_channels)
       self.dec = Multiband_iSTFT_Generator(latent_dim, n_blocks, gen_istft_n_fft, gen_istft_hop_size, subbands, gin_channels=gin_channels)
     elif ms_istft_vits == True:
       print('Mutli-stream iSTFT VITS')
